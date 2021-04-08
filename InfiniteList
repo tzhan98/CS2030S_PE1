@@ -7,117 +7,53 @@ package cs2030s.fp;
  */
 public class Lazy<T> {
 
-  /** value wrapped in a producer.*/
   private Producer<T> producer;
 
-  /** value wrapped in Maybe.*/
   private Maybe<T> value = Maybe.none();
 
-  /**
-   * Factory Method to create a Lazy Object.
-   *
-   * @param value The value of Lazy.
-   * @param <T> Type of value.
-   * @return lazy object.
-   */
   public static <T> Lazy<T> of(T value) {
     return new Lazy<T>(value);
   }
 
-  /**
-   * Constructor to create a Lazy Object.
-   *
-   * @param value The value of Lazy.
-   */
   private Lazy(T value) {
     this.value = Maybe.of(value);
   }
 
-
-  /**
-   * Constructor to create a Lazy Object.
-   *
-   * @param value The value of Lazy wrapped in a producer.
-   */
   private Lazy(Producer<T> value) {
     this.producer = value;
   }
 
 
-  /**
-   * Factory Method to create a Lazy Object.
-   *
-   * @param value The value of Lazy wrapped in a producer.
-   * @param <T> type of the value.
-   * @return lazy object.
-   */
   public static <T> Lazy<T> of(Producer<T> value) {
     return new Lazy<T>(value);
   }
 
 
-  /**
-   * Method to get the value of a Lazy Object.
-   *
-   * @return value inside the Lazy Object.
-   */
   public T get() {
     this.value = Maybe.some(this.value.orElseGet(producer));
     return value.orElse(null);
   }
 
-  /**
-   * Get the string representation.
-   *
-   * @return string representation of value inside Lazy Object.
-   */
+
   @Override
   public String toString() {
     return this.value.map(String::valueOf).orElse("?"); 
   }
 
-  /**
-   * Method to map a Lazy object to another type of Lazy object.
-   *
-   * @param cond The transformer to map a lazy of one type to another.
-   * @param <U> Type of the new value inside the Lazy object.
-   * @return A new type of lazy object.
-   */
+
   public <U> Lazy<U> map(Transformer<? super T, ? extends U> cond) {
     return Lazy.of(() -> cond.transform(this.get()));
   }
 
-  
-  /**
-   * Method to map a Lazy object to another type of Lazy object but do not wrap it twice unlike map.
-   *
-   * @param cond The transformer to map a lazy of one type to another.
-   * @param <U> Type of the new value inside the Lazy object.
-   * @return A new type of lazy object that is not wrapped twice in Lazy.
-   */
+
   public <U> Lazy<U> flatMap(Transformer<? super T, ? extends Lazy<? extends U>> cond) {
     return Lazy.of(() -> cond.transform(this.get()).get());
   }
 
-
-  /**
-   * Filter and returns true if the value in Lazy satisfies the 
-   * boolean condition provided; false otherwise.
-   *
-   * @param cond The boolean condition for the value in Lazy object to satisfy.
-   * @return A boolean value wrapped in lazy object.
-   */
   public Lazy<Boolean> filter(BooleanCondition<? super T> cond) {
     return Lazy.of(() -> cond.test(this.get()) ? true : false);
   }
 
-  /**
-   * Check if the current object is equal to the compared object.
-   *
-   * @param obj compared object.
-   * @return true if current object is equal to compared object and false otherwise.
-   */
-  @Override
   public boolean equals(Object obj) {
     if (obj instanceof Lazy<?>) {
       @SuppressWarnings("unchecked")
@@ -128,21 +64,13 @@ public class Lazy<T> {
     }
   }
 
-  /**
-   * Method to combine 2 lazy objects into one lazy object based on a Combiner.
-   *
-   * @param laze The other lazy object to combine with.
-   * @param <S> Type of value in Lazy to combine with.
-   * @param <R> Type of value in Lazy to return.
-   * @param comb The Combiner instructions to combine the 2 lazy objects.
-   * @return A new lazy object.
-   */
+
   public <S, R> Lazy<R> combine(Lazy<? extends S> laze, 
         Combiner<? super T, ? super S, ? extends R> comb) {
     return Lazy.of(() -> comb.combine(this.get(), laze.get())); 
   }
   
-  /*******************************************/
+/***************************************************************************************************************************************************************************/
   //infinitelist map and filter
   public <R> InfiniteList<R> map(Transformer<? super T, ? extends R> mapper) {
     return new InfiniteList<R>(
@@ -155,4 +83,556 @@ public class Lazy<T> {
       head.map(h -> h.filter(predicate)),
       tail.map(t -> t.filter(predicate)));
   }
+}
+/***************************************************************************************************************************************************************************/
+package cs2030s.fp;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.NoSuchElementException;
+
+/**
+ * A infinite list that lazily evaluates value inside.
+ *
+ * @Author Toh Zhan Qing (Group 16A).
+ */
+public class InfiniteList<T> {
+
+  /** head of the infinitelist wrapped in lazy and maybe. */
+  private final Lazy<Maybe<T>> head;
+
+  /** tail of the infinitelist wrapped in lazy and maybe. */
+  private final Lazy<InfiniteList<T>> tail;
+
+  /**
+   * Constructor to create an infinitelist.
+   */
+  InfiniteList() { 
+    head = null; 
+    tail = null;
+  }
+
+  /**
+   * Generates an infinitelist.
+   *
+   * @param <T> type of the value in infinitelist
+   * @param producer The value to generate infinitely wrapped in a producer
+   * @return Infinitelist with all the values in producer
+   */
+  public static <T> InfiniteList<T> generate(Producer<T> producer) {
+    return new InfiniteList<T>(Lazy.of(() -> Maybe.some(producer.produce())),
+      Lazy.of(() -> generate(producer)));
+  }
+
+  /**
+   * Creates an infinitelist that has every successive value transformed by a function.
+   *
+   * @param <T> type of the value in infinitelist
+   * @param seed The value to start with
+   * @param next The function to apply to seed successively
+   * @return Infinitelist with values applied to next
+   */
+  public static <T> InfiniteList<T> iterate(T seed, Transformer<T, T> next) {
+    return new InfiniteList<>(Lazy.of(() -> Maybe.some(seed)), 
+        Lazy.of(() -> iterate(next.transform(seed), next)));
+    //return new InfiniteList<T>(seed, () -> iterate(next.transform(seed), next));
+  }
+  
+
+  /**
+   * Constructor to create an infinitelist.
+   *
+   * @param head Head of the infinitelist
+   * @param tail Tail of the infinitelist (an infinitelist) wrapped in a producer
+   */
+  private InfiniteList(T head, Producer<InfiniteList<T>> tail) {
+    this.head = Lazy.of(() -> Maybe.some(head));
+    this.tail = Lazy.of(tail);
+  }
+  
+  /**
+   * Constructor to create an infinitelist.
+   *
+   * @param head Head of the infinitelist wrapped in a lazy and maybe
+   * @param tail Tail of the infinitelist (an infinitelist) wrapped in lazy
+   */  
+  private InfiniteList(Lazy<Maybe<T>> head, Lazy<InfiniteList<T>> tail) {
+    this.head = head;
+    this.tail = tail;
+  }
+
+  /**
+   * Method to get the head of the infinitelist; if it is a none, 
+      return the head of the tail of the infinitelist.
+   *
+   * @return head of the infinitelist
+   */
+  public T head() {
+    if (this.head.get() == Maybe.none()) {
+      return this.tail.get().head();
+    } else {
+      return this.head.get().orElse(null);
+    }
+    //return this.head.get().orElseGet(()->this.tail.get().head());
+  }
+
+
+  /**
+   * Method to get the tail of the infinitelist.
+   *
+   * @return tail of the infinitelist, a infinitelist object
+   */
+  public InfiniteList<T> tail() {
+    if (this.head.get() == Maybe.none()) {
+      return this.tail.get().tail();
+    } else {
+      return this.tail.get();
+    }
+    //return this.head.get().map(x->this.tail.get()).orElseGet(()->this.tail.get().tail());
+  }
+  
+
+  /**
+   * Method to map infinitelist.
+   *
+   * @param <R> The new type of the value in infinitelist
+   * @param mapper The transformer to map every element in infinitelist
+   * @return The new infinitelist that has been mapped
+   */
+  public <R> InfiniteList<R> map(Transformer<? super T, ? extends R> mapper) {
+    //return new InfiniteList<R>(this.head.map(x -> x.map(mapper)), 
+    //this.tail.map(x -> x.map(mapper)));
+    return new InfiniteList<R>(Lazy.of(() -> Maybe.some(mapper.transform(this.head()))),
+        Lazy.of(() -> this.tail().map(mapper)));
+  }
+
+  /**
+   * Method to filter infinitelist.
+   *
+   * @param predicate The predicate that each value in infinitelist must pass. if fail predicate,
+      the element will be removed. Else it stays.
+   * @return A new infinitelist with elements filtered
+   */
+  public InfiniteList<T> filter(BooleanCondition<? super T> predicate) {
+    /*Lazy<Maybe<T>> newHead = Lazy.of(()-> predicate.test(this.head()) ? 
+      Maybe.some(this.head()) : Maybe.none());
+    Lazy<InfiniteList<T>> newTail = Lazy.of(()-> this.tail().filter(predicate));
+    return new InfiniteList<>(newHead,newTail);*/
+    return new InfiniteList<T>(this.head.map(x -> x.filter(predicate)), 
+        this.tail.map(x -> x.filter(predicate)));
+  }
+
+  /**
+   * A class for the emptylist.
+   */
+  private static class EmptyList extends InfiniteList<Object> {
+
+    /** A static emptylist. */
+    private static final InfiniteList<?> EMPTYLIST = new EmptyList(); 
+    
+    /**
+     * Constructor for Emptylist.
+     */
+    public EmptyList() {
+      super();
+    }
+    
+    /**
+     * Method that returns the head for emptylist.
+     *
+     * @return throws an exception
+     */
+    @Override
+    public Object head() {
+      throw new java.util.NoSuchElementException();
+    }
+    
+    /**
+     * Method that returns the tail for the emptylist.
+     *
+     * @return returns an emptylist
+     */
+    @Override
+    public InfiniteList<Object> tail() {
+      return empty();
+    }
+    
+    /**
+     * Method that checks if the emptylist is empty.
+     *
+     * @return Returns true as emptylist is empty
+     */
+    @Override
+    public boolean isEmpty() {
+      return true;
+    }
+    
+    /**
+     * Method that maps the emptylist.
+     *
+     * @param mapper Method to map every value in the emptylist
+     * @return the new emptylist that is mapped (which is an emptylist)
+     */
+    @Override
+    public <R> InfiniteList<R> map(Transformer<? super Object, ? extends R> mapper) {
+      return empty();
+    }
+    
+    /**
+     * Method that filters the emptylist.
+     *
+     * @param predicate Method to filter every value in the emptylist
+     * @return the new emptylist that is filtered (which is an emptylist)
+     */
+    @Override
+    public InfiniteList<Object> filter(BooleanCondition<? super Object> predicate) {
+      return empty();
+    }
+
+    /**
+     * Method that limits the emptylist.
+     *
+     * @param n Number to limit emptylist to
+     * @return the new emptylist that 
+        has a maximum n elemnts (which is an emptylist)
+     */   
+    @Override
+    public InfiniteList<Object> limit(long n) {
+      return empty();
+    }
+    
+    /**
+     * Method that keep reuturning an infinitelist while the predicate is true.
+     *
+     * @param predicate predicate for each of the value in emptylist to fufill
+     * @return the new emptylist that 
+         fufuils the predicate (which is an emptylist)
+     */   
+    @Override 
+    public InfiniteList<Object> takeWhile(BooleanCondition<Object> predicate) {
+      return empty();
+    }
+
+    /**
+     * Method that counts the elements in the emptylist.
+     *
+     * @return the number of elements in the emptylist
+     */   
+    @Override
+    public long count() {
+      return 0;
+    }
+
+    /**
+     * Method that changes the elemets in the emptylist to a list.
+     *
+     * @return an emptylist as there are no elements in a emptylist
+     */   
+    @Override
+    public List<Object> toList() {
+      return new ArrayList<>();
+    }
+  }
+
+  /**
+   * Method that returns an emptylist.
+   *
+   * @param <T> type of the emptylist
+   * @return The emptylist
+   */
+  public static <T> InfiniteList<T> empty() {
+    @SuppressWarnings("unchecked")
+    InfiniteList<T> emp = (InfiniteList<T>) InfiniteList.EmptyList.EMPTYLIST;
+    return emp;
+  }
+
+  /**
+   * Method that returns an infinitelist with at most n elements.
+   *
+   * @param n max number of elements inthe infinitelist to return
+   * @return The infinitelist with at most n elements
+   */
+  public InfiniteList<T> limit(long n) {
+    if (n <= 0) {
+      return empty();
+    } else {
+      return new InfiniteList<T>(this.head(),
+          () -> this.tail().limit(n - 1));
+    }
+  }
+
+  /*
+    public InfiniteList<T> takeWhile(BooleanCondition<? super T> predicate) {
+      Lazy<Boolean> isNone = head.filter(x->x == Maybe.none());
+      Lazy<Boolean> passes = head.filter(x->x.filter(predicate)!= Maybe.none()); 
+      Lazy<Maybe<T>> newHead = Lazy.of(()-> (isNone.get() || passes.get()) ?
+        Maybe.some(head.get().get()) : Maybe.none());
+      Lazy<InfiniteList<T>> newTail = Lazy.of(()-> (isNone.get() || passes.get()) 
+        ? this.tail().takeWhile(predicate) : empty());
+      return new InfiniteList<>(newHead, newTail);
+    }
+  */
+
+
+  /**
+   * Method that returns an infinitelist till the predicate return false, 
+   * when that happens, an emptylist is returned.
+   *
+   * @param predicate the predicate for each of the value in the infinitelist to satisfy
+   * @return the infinitelist with elements that satisfies predicate
+   */
+  public InfiniteList<T> takeWhile(BooleanCondition<? super T> predicate) {
+    Lazy<Boolean> bol = Lazy.of(() -> this.head()).filter(predicate);
+    Lazy<Maybe<T>> newHead = Lazy.of(() -> bol.get() ? Maybe.some(this.head()) : Maybe.none());
+    Lazy<InfiniteList<T>> newTail = Lazy.of(() -> bol.get() ?
+        this.tail().takeWhile(predicate) : empty());
+    return new InfiniteList<>(newHead, newTail);
+  }
+
+  /**
+   * Method that checks if the infinitelist is empty.
+   *
+   * @return Return false as an infinitelist is never empty
+   */
+  public boolean isEmpty() {
+    return false;
+  }
+
+  /**
+   * Method that accumulates the elements inside the infinitelist with a provided function.
+   *
+   * @param <U> new type of the accumualted value
+   * @param identity value to accumulate once you reach the end of the list
+   * @param accumulator the function to accumulate 2 elements
+   * @return type of the accumulated value in the infinitelist
+   */
+  public <U> U reduce(U identity, Combiner<U, ? super T, U> accumulator) {
+    return this.isEmpty() ? identity : accumulator.combine(this.tail().reduce(identity,
+        accumulator), this.head());
+  }
+
+  /**
+   * Method that counts how many elements are in the infinitelist.
+   *
+   * @return number of elements in the infinitelist
+   */
+  public long count() {
+    if (this.isEmpty()) {
+      return 0;
+    } else {
+      if (this.head.get().equals(Maybe.none())) {
+        return this.tail.get().count();
+      } else {
+        return 1 + this.tail.get().count();
+      }
+    }
+  }
+
+  /**
+   * Method that transforms infinitelist to a list.
+   *
+   * @return infinitelist to a list type
+   */
+  public List<T> toList() {
+    List<T> myList = new ArrayList<>();
+    InfiniteList<T> infi = this;
+    while (!infi.isEmpty()) {
+      if (infi.head.get().equals(Maybe.none())) {
+        //dont do anything
+      } else {
+        myList.add(infi.head.get().get());
+      }
+      infi = infi.tail.get();
+    }
+    return myList;
+  }
+
+  /**
+   * Method that returns the string represenation of the infinitelist.
+   *
+   * @return String representation of the infinitelist
+   */
+  @Override
+  public String toString() {
+    return "[" + this.head + " " + this.tail + "]";
+  }
+}
+
+/***************************************************************************************************************************************************************************/
+/**
+ * CS2030S Lab 5
+ * AY20/21 Semester 2
+ *
+ * @author Toh Zhan Qing (Lab Group 16A)
+ */
+
+package cs2030s.fp;
+
+import java.util.NoSuchElementException;
+
+public abstract class Maybe<T> {
+
+  protected abstract T get();
+
+  public abstract <U extends T> T orElse(U smth);
+
+  public abstract <U extends T> T orElseGet(Producer<U> smth);
+  
+  private static class None extends Maybe<Object> {
+    private static final Maybe<?> NONE = new None();
+
+    @Override
+    public String toString() {
+      return "[]";
+    }
+
+    @Override
+    public <T> T orElse(T smth) {
+      return smth;
+    }
+
+    @Override
+    public <T> T orElseGet(Producer<T> smth) {
+      return smth.produce();
+    }
+    
+    //How can this be overriden? Supertype of return type
+    @Override
+    public Object get() throws NoSuchElementException {
+      throw new NoSuchElementException();
+    }
+
+    @Override
+    public boolean equals(Object compared) {
+      if (compared instanceof None) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  //immutable
+  private static class Some<T> extends Maybe<T> {
+    private final T content;
+
+    @Override
+    public String toString() {
+      String str;
+      if (this.equals(Maybe.none())) {
+        str = "[null]";
+      } else {
+        str = String.format("[%s]", this.content);
+      }
+      return str;
+    }
+
+    @Override
+    public <U extends T> T orElse(U smth) {
+      return this.content;
+    }
+    
+    public Some(T t) {
+      this.content = t;
+    }
+
+    @Override
+    public T get() {
+      return this.content;
+    }
+
+    @Override
+    public <U extends T> T orElseGet(Producer<U> smth) {
+      return this.content;
+    }
+
+    @Override 
+    public boolean equals(Object compared) {
+      if (compared instanceof Some<?>) {
+        @SuppressWarnings("unchecked")
+        Some<T> obj = (Some<T>) compared;
+        if (obj.content == null && this.content == null) {
+          return true;
+        } else if (obj.content == null && this.content != null) {
+          return false;
+        } else if (obj.content != null && this.content == null) {
+          return false;
+        } else {
+          return this.content.equals(obj.content);
+        }
+      } else {
+        return false;
+      }
+    }
+
+  }
+
+  //return same instance of none even with multiple calls
+  public static <T> Maybe<T> none() {
+    // how does None.NONE run when NONE is private?
+    @SuppressWarnings("unchecked")
+    Maybe<T> none = (Maybe<T>) Maybe.None.NONE;
+    return none;
+  }
+
+  public static <T> Some<T> some(T t) {
+    return new Some<T>(t); 
+  }
+
+  public static <T> Maybe<T> of(T content) {
+    if (content == null) {
+      return none();
+    } else {
+      return some(content);
+    }
+  }
+
+  public Maybe<T> filter(BooleanCondition<? super T> cond) {
+    if (this instanceof None) {
+      return none();
+    } else {
+      // this is a instanceof Some
+      Some<T> obj = (Some<T>) this;
+      T content = obj.get();
+      if (this.equals(Maybe.none())) {
+        return some(null);
+      } else if (cond.test(content)) {
+        return this;
+      } else {
+        return none();
+      }
+    }
+  }
+
+  public <U> Maybe<U> map(Transformer<? super T, ? extends U> cond) throws NullPointerException {
+    if (this instanceof None) {
+      return none();
+    } else {
+      if (this.equals(Maybe.none())) {
+        throw new NullPointerException();
+      } else {
+        return some(cond.transform(this.get()));
+      }
+    }
+  }
+  
+  public <U> Maybe<U> flatMap(Transformer<? super T, ? extends Maybe<? extends U>> cond)
+      throws NullPointerException {
+    if (this instanceof None) {
+      return none();
+    } else {
+      if (this.equals(Maybe.none())) {
+        throw new NullPointerException();
+      } else {
+        //safe as this.get will always be of type U.
+        @SuppressWarnings("unchecked")
+        Maybe<U> v1 = (Maybe<U>) cond.transform(this.get());
+        return v1;
+      }
+    }
+
+  }
+  
+
 }
