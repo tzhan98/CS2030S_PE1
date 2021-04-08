@@ -1,0 +1,158 @@
+package cs2030s.fp;
+
+/**
+ * A wrapper that lazily evaluates the value inside it.
+ *
+ * @Author Toh Zhan Qing (Group 16A).
+ */
+public class Lazy<T> {
+
+  /** value wrapped in a producer.*/
+  private Producer<T> producer;
+
+  /** value wrapped in Maybe.*/
+  private Maybe<T> value = Maybe.none();
+
+  /**
+   * Factory Method to create a Lazy Object.
+   *
+   * @param value The value of Lazy.
+   * @param <T> Type of value.
+   * @return lazy object.
+   */
+  public static <T> Lazy<T> of(T value) {
+    return new Lazy<T>(value);
+  }
+
+  /**
+   * Constructor to create a Lazy Object.
+   *
+   * @param value The value of Lazy.
+   */
+  private Lazy(T value) {
+    this.value = Maybe.of(value);
+  }
+
+
+  /**
+   * Constructor to create a Lazy Object.
+   *
+   * @param value The value of Lazy wrapped in a producer.
+   */
+  private Lazy(Producer<T> value) {
+    this.producer = value;
+  }
+
+
+  /**
+   * Factory Method to create a Lazy Object.
+   *
+   * @param value The value of Lazy wrapped in a producer.
+   * @param <T> type of the value.
+   * @return lazy object.
+   */
+  public static <T> Lazy<T> of(Producer<T> value) {
+    return new Lazy<T>(value);
+  }
+
+
+  /**
+   * Method to get the value of a Lazy Object.
+   *
+   * @return value inside the Lazy Object.
+   */
+  public T get() {
+    this.value = Maybe.some(this.value.orElseGet(producer));
+    return value.orElse(null);
+  }
+
+  /**
+   * Get the string representation.
+   *
+   * @return string representation of value inside Lazy Object.
+   */
+  @Override
+  public String toString() {
+    return this.value.map(String::valueOf).orElse("?"); 
+  }
+
+  /**
+   * Method to map a Lazy object to another type of Lazy object.
+   *
+   * @param cond The transformer to map a lazy of one type to another.
+   * @param <U> Type of the new value inside the Lazy object.
+   * @return A new type of lazy object.
+   */
+  public <U> Lazy<U> map(Transformer<? super T, ? extends U> cond) {
+    return Lazy.of(() -> cond.transform(this.get()));
+  }
+
+  
+  /**
+   * Method to map a Lazy object to another type of Lazy object but do not wrap it twice unlike map.
+   *
+   * @param cond The transformer to map a lazy of one type to another.
+   * @param <U> Type of the new value inside the Lazy object.
+   * @return A new type of lazy object that is not wrapped twice in Lazy.
+   */
+  public <U> Lazy<U> flatMap(Transformer<? super T, ? extends Lazy<? extends U>> cond) {
+    return Lazy.of(() -> cond.transform(this.get()).get());
+  }
+
+
+  /**
+   * Filter and returns true if the value in Lazy satisfies the 
+   * boolean condition provided; false otherwise.
+   *
+   * @param cond The boolean condition for the value in Lazy object to satisfy.
+   * @return A boolean value wrapped in lazy object.
+   */
+  public Lazy<Boolean> filter(BooleanCondition<? super T> cond) {
+    return Lazy.of(() -> cond.test(this.get()) ? true : false);
+  }
+
+  /**
+   * Check if the current object is equal to the compared object.
+   *
+   * @param obj compared object.
+   * @return true if current object is equal to compared object and false otherwise.
+   */
+  @Override
+  public boolean equals(Object obj) {
+    if (obj instanceof Lazy<?>) {
+      @SuppressWarnings("unchecked")
+      Lazy<T> laze = (Lazy<T>) obj;
+      return this.get().equals(laze.get());
+    } else {
+      return false;
+    }
+  }
+
+  /**
+   * Method to combine 2 lazy objects into one lazy object based on a Combiner.
+   *
+   * @param laze The other lazy object to combine with.
+   * @param <S> Type of value in Lazy to combine with.
+   * @param <R> Type of value in Lazy to return.
+   * @param comb The Combiner instructions to combine the 2 lazy objects.
+   * @return A new lazy object.
+   */
+  public <S, R> Lazy<R> combine(Lazy<? extends S> laze, 
+        Combiner<? super T, ? super S, ? extends R> comb) {
+    return Lazy.of(() -> comb.combine(this.get(), laze.get())); 
+  }
+  
+  /*******************************************/
+  //infinitelist map and filter
+  public <R> InfiniteList<R> map(Transformer<? super T, ? extends R> mapper) {
+    return new InfiniteList<R>(
+      head.map(h -> h.map(mapper)),
+      tail.map(t -> t.map(mapper)));
+  }
+  
+  public InfiniteList<T> filter(BooleanCondtion<? super T> predicate) {
+    return new InfiniteList<T>(
+      head.map(h -> h.filter(predicate)),
+      tail.map(t -> t.filter(predicate)));
+  }
+}
